@@ -41,14 +41,16 @@ chess_logic = ChessLogic(state_manager=puzzle_manager.state_manager)
 message_counter = 0
 
 # Setup directories
+STATIC_DIR = Path("static")
 IMAGES_DIR = Path("static/images")
+STATIC_DIR.mkdir(exist_ok=True)  # Ensure static directory exists first
 IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 
 MEMORY_DIR = Path("data/memory")
 MEMORY_DIR.mkdir(parents=True, exist_ok=True)
 MEMORY_FILE = MEMORY_DIR / "user_preferences.json"
 
-# Mount static files
+# Mount static files - ensure directory exists before mounting
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @mcp.tool(description="Fetch a new chess puzzle from Lichess with optional theme and difficulty filters")
@@ -1084,6 +1086,30 @@ def get_system_info() -> Dict[str, Any]:
             "success": False,
             "error": f"Failed to get system info: {str(e)}"
         }
+
+# Add a health check endpoint for debugging
+@app.get("/health")
+async def health_check():
+    """Health check endpoint that includes static file information"""
+    static_exists = STATIC_DIR.exists()
+    images_exists = IMAGES_DIR.exists()
+    image_files = []
+
+    if images_exists:
+        try:
+            image_files = [f.name for f in IMAGES_DIR.iterdir() if f.is_file()]
+        except Exception:
+            pass
+
+    return {
+        "status": "healthy",
+        "static_directory_exists": static_exists,
+        "images_directory_exists": images_exists,
+        "image_files_count": len(image_files),
+        "image_files": image_files[:10],  # Show first 10 files
+        "static_path": str(STATIC_DIR.absolute()),
+        "images_path": str(IMAGES_DIR.absolute())
+    }
 
 # Mount MCP endpoints onto FastAPI app
 # Note: Due to FastMCP/FastAPI compatibility issues, we'll run in pure MCP mode for deployment
