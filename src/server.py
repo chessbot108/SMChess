@@ -764,23 +764,42 @@ def get_system_info() -> Dict[str, Any]:
         }
 
 # Mount MCP endpoints onto FastAPI app
-app.mount("/mcp", mcp.http_app)
+# Note: Due to FastMCP/FastAPI compatibility issues, we'll run in pure MCP mode for deployment
 
 if __name__ == "__main__":
     import sys
 
-    if "--mcp" in sys.argv:
-        # Run in pure MCP mode for testing with mcp-inspector
-        mcp.run()
+    # Check if we're in production deployment (Render sets ENVIRONMENT=production)
+    environment = os.environ.get("ENVIRONMENT", "development")
+
+    if "--mcp" in sys.argv or environment == "production":
+        # Run in pure MCP mode for testing or production deployment
+        print("Starting MCP server in pure mode")
+
+        if environment == "production":
+            # Use HTTP transport for production deployment
+            port = int(os.environ.get("PORT", 8000))
+            print(f"Starting MCP HTTP server on port {port}")
+            mcp.run(transport="http", port=port, host="0.0.0.0")
+        else:
+            # Use STDIO transport for local testing with mcp-inspector
+            mcp.run()
     else:
-        # Run in FastAPI mode for production
+        # Run in FastAPI mode for local development only
         import uvicorn
 
         port = int(os.environ.get("PORT", 8000))
         host = "0.0.0.0"
 
-        print(f"Starting FastAPI server with MCP on {host}:{port}")
-        print(f"MCP endpoints available at: http://{host}:{port}/mcp/")
+        print(f"Starting FastAPI server (development mode) on {host}:{port}")
         print(f"Static files available at: http://{host}:{port}/static/")
+
+        # For development, try to mount MCP if possible
+        try:
+            app.mount("/mcp", mcp.http_app)
+            print(f"MCP endpoints available at: http://{host}:{port}/mcp/")
+        except Exception as e:
+            print(f"Warning: Could not mount MCP endpoints: {e}")
+            print("Use --mcp flag for pure MCP mode")
 
         uvicorn.run(app, host=host, port=port)
