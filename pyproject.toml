@@ -1,0 +1,13 @@
+[project]
+name = "smchess"
+version = "1.0.0"
+requires-python = ">=3.10"
+dependencies = [
+    "fastmcp>=2.12.0",
+    "pyright>=1.1.405",
+    "ruff>=0.13.0",
+    "uvicorn>=0.35.0",
+]
+
+[tool.uv]
+dev-dependencies = []
