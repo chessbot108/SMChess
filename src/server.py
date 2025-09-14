@@ -208,6 +208,13 @@ def send_message(
                      - moves_uci: List[str]
                      - message_id: int (optional)
 
+    Example valid input:
+        message="Here's the current position"
+        puzzle_state={
+            "puzzle_id": "abc123",
+            "moves_uci": ["e2e4", "e7e5", "g1f3"]
+        }
+
     Returns:
         {
             "success": bool,
@@ -733,16 +740,51 @@ def write_memory(memory_data: Dict[str, Any]) -> Dict[str, Any]:
             "error": f"Failed to write memory: {str(e)}"
         }
 
+@mcp.tool(description="Read the system prompt instructions - only read if you don't remember reading it")
+def read_system_prompt() -> Dict[str, Any]:
+    """
+    Read system prompt instructions from system/system_info.md.
+
+    IMPORTANT: Only call this tool if you don't remember reading the system prompt already.
+    This contains behavioral guidelines and instructions for interacting with users.
+
+    Returns:
+        {
+            "success": bool,
+            "system_prompt": str,
+            "error": str (if success=false)
+        }
+    """
+    try:
+        system_prompt_path = Path("system/system_prompt.md")
+        if system_prompt_path.exists():
+            with open(system_prompt_path, 'r') as f:
+                system_prompt = f.read()
+        else:
+            system_prompt = ""
+
+        return {
+            "success": True,
+            "system_prompt": system_prompt
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Failed to read system prompt: {str(e)}"
+        }
+
 @mcp.tool(description="Get system information about available puzzle types and parameters")
 def get_system_info() -> Dict[str, Any]:
     """
     Get system information about available puzzle angles, difficulties, and server capabilities.
 
-    This serves as a system prompt containing:
+    This serves as system info containing:
     - Available Lichess puzzle angles/themes
     - Difficulty level options
     - Server capabilities and endpoints
     - Usage guidelines for puzzle requests
+    - Complete MCP tool schemas
 
     Returns:
         {
@@ -787,53 +829,233 @@ def get_system_info() -> Dict[str, Any]:
                 }
             },
 
-            "mcp_endpoints": [
-                {
-                    "name": "get_new_puzzle",
-                    "description": "Fetch a new chess puzzle with optional theme and difficulty filters",
-                    "parameters": ["angle (optional)", "difficulty (optional)"]
+            "mcp_tool_schemas": {
+                "get_new_puzzle": {
+                    "description": "Fetch a new chess puzzle from Lichess with optional theme and difficulty filters",
+                    "parameters": {
+                        "angle": {
+                            "type": "string",
+                            "required": False,
+                            "description": "The theme or opening to filter puzzles with",
+                            "examples": ["middlegame", "endgame", "mate", "tactics", "fork", "pin"]
+                        },
+                        "difficulty": {
+                            "type": "string",
+                            "required": False,
+                            "description": "Desired difficulty relative to user rating",
+                            "enum": ["easiest", "easier", "normal", "harder", "hardest"]
+                        }
+                    },
+                    "returns": {
+                        "success": "bool",
+                        "puzzle_id": "str",
+                        "rating": "int",
+                        "themes": "List[str]",
+                        "fen": "str",
+                        "solution_length": "int",
+                        "user_difficulty": "str",
+                        "message": "str",
+                        "error": "str (if success=false)"
+                    }
                 },
-                {
-                    "name": "attempt_move",
+                "attempt_move": {
                     "description": "Attempt to play a single chess move in UCI notation",
-                    "parameters": ["move_uci", "from_state_moves_uci (optional)"]
+                    "parameters": {
+                        "move_uci": {
+                            "type": "string",
+                            "required": True,
+                            "description": "Single move in UCI format",
+                            "examples": ["e2e4", "g1f3", "e7e8q"]
+                        },
+                        "from_state_moves_uci": {
+                            "type": "List[str]",
+                            "required": False,
+                            "description": "Optional starting position as UCI moves",
+                            "examples": [["e2e4", "e7e5"]]
+                        }
+                    },
+                    "returns": {
+                        "success": "bool",
+                        "move_valid": "bool",
+                        "result": "str (success|invalid_move|wrong_move|puzzle_solved)",
+                        "message": "str",
+                        "puzzle_state": "Dict (only if move_valid=true)",
+                        "error": "str (if success=false)"
+                    }
                 },
-                {
-                    "name": "get_state",
-                    "description": "Search for specific puzzle states or get current state",
-                    "parameters": ["puzzle_id", "moves_uci", "move_count", "message_id", "create_if_missing"]
-                },
-                {
-                    "name": "send_message",
+                "send_message": {
                     "description": "Send a message with optional puzzle state image",
-                    "parameters": ["message", "puzzle_state (optional)"]
+                    "parameters": {
+                        "message": {
+                            "type": "string",
+                            "required": True,
+                            "description": "The text message to send"
+                        },
+                        "puzzle_state": {
+                            "type": "Dict[str, Any]",
+                            "required": False,
+                            "description": "Optional puzzle state for image generation",
+                            "schema": {
+                                "puzzle_id": "str (required)",
+                                "moves_uci": "List[str] (required)",
+                                "message_id": "int (optional)"
+                            },
+                            "example": {
+                                "puzzle_id": "abc123",
+                                "moves_uci": ["e2e4", "e7e5", "g1f3"]
+                            }
+                        }
+                    },
+                    "returns": {
+                        "success": "bool",
+                        "message_id": "int",
+                        "message": "str",
+                        "image_url": "str (optional)",
+                        "error": "str (if success=false)"
+                    }
                 },
-                {
-                    "name": "evaluate_chess_position",
+                "get_state": {
+                    "description": "Search for specific puzzle states or get current state",
+                    "parameters": {
+                        "puzzle_id": {
+                            "type": "string",
+                            "required": False,
+                            "description": "Exact puzzle ID to match (defaults to current puzzle)"
+                        },
+                        "moves_uci": {
+                            "type": "List[str]",
+                            "required": False,
+                            "description": "Exact sequence of UCI moves to match",
+                            "examples": [["e2e4", "e7e5"]]
+                        },
+                        "move_count": {
+                            "type": "int",
+                            "required": False,
+                            "description": "Exact number of moves played"
+                        },
+                        "move_count_min": {
+                            "type": "int",
+                            "required": False,
+                            "description": "Minimum number of moves played"
+                        },
+                        "move_count_max": {
+                            "type": "int",
+                            "required": False,
+                            "description": "Maximum number of moves played"
+                        },
+                        "message_id": {
+                            "type": "int",
+                            "required": False,
+                            "description": "Exact message ID to match"
+                        },
+                        "create_if_missing": {
+                            "type": "bool",
+                            "required": False,
+                            "default": False,
+                            "description": "Create new state if no matches found"
+                        }
+                    },
+                    "returns": {
+                        "success": "bool",
+                        "state_found": "bool",
+                        "puzzle_id": "str",
+                        "moves_uci": "List[str]",
+                        "move_count": "int",
+                        "message_id": "int",
+                        "fen": "str",
+                        "is_current_state": "bool",
+                        "total_matching_states": "int",
+                        "state_created": "bool (optional)",
+                        "error": "str (if success=false)"
+                    }
+                },
+                "evaluate_chess_position": {
                     "description": "Evaluate a chess position using Stockfish engine",
-                    "parameters": ["puzzle_state (optional)"]
+                    "parameters": {
+                        "puzzle_state": {
+                            "type": "Dict[str, Any]",
+                            "required": False,
+                            "description": "Optional puzzle state to evaluate (uses current state if not provided)",
+                            "schema": {
+                                "puzzle_id": "str (required)",
+                                "moves_uci": "List[str] (required)"
+                            }
+                        }
+                    },
+                    "returns": {
+                        "success": "bool",
+                        "evaluation": "float (centipawns, positive = white advantage)",
+                        "puzzle_id": "str",
+                        "moves_uci": "List[str]",
+                        "fen": "str",
+                        "error": "str (if success=false)"
+                    }
                 },
-                {
-                    "name": "get_board_pieces",
+                "get_board_pieces": {
                     "description": "Get positions of all pieces on the current board state",
-                    "parameters": ["puzzle_state (optional)"]
+                    "parameters": {
+                        "puzzle_state": {
+                            "type": "Dict[str, Any]",
+                            "required": False,
+                            "description": "Optional puzzle state to get pieces from (uses current state if not provided)",
+                            "schema": {
+                                "puzzle_id": "str (required)",
+                                "moves_uci": "List[str] (required)"
+                            }
+                        }
+                    },
+                    "returns": {
+                        "success": "bool",
+                        "puzzle_id": "str",
+                        "moves_uci": "List[str]",
+                        "fen": "str",
+                        "pieces": "Dict[str, str] (square -> piece symbol, e.g. {'e1': 'K', 'd8': 'q'})",
+                        "error": "str (if success=false)"
+                    }
                 },
-                {
-                    "name": "read_memory",
-                    "description": "Read user preferences and interaction history",
-                    "parameters": []
+                "read_memory": {
+                    "description": "Read user preferences and interaction history from persistent memory",
+                    "parameters": {},
+                    "returns": {
+                        "success": "bool",
+                        "memory": "Dict containing user preferences and patterns",
+                        "error": "str (if success=false)"
+                    }
                 },
-                {
-                    "name": "write_memory",
-                    "description": "Write user preferences and interaction patterns",
-                    "parameters": ["memory_data"]
+                "write_memory": {
+                    "description": "Write user preferences and interaction patterns to persistent memory",
+                    "parameters": {
+                        "memory_data": {
+                            "type": "Dict[str, Any]",
+                            "required": True,
+                            "description": "Dictionary containing user preferences and patterns to store"
+                        }
+                    },
+                    "returns": {
+                        "success": "bool",
+                        "message": "str",
+                        "error": "str (if success=false)"
+                    }
                 },
-                {
-                    "name": "get_system_info",
-                    "description": "Get system information about available puzzle types",
-                    "parameters": []
+                "read_system_prompt": {
+                    "description": "Read the system prompt instructions - only read if you don't remember reading it",
+                    "parameters": {},
+                    "returns": {
+                        "success": "bool",
+                        "system_prompt": "str",
+                        "error": "str (if success=false)"
+                    }
+                },
+                "get_system_info": {
+                    "description": "Get system information about available puzzle types and parameters",
+                    "parameters": {},
+                    "returns": {
+                        "success": "bool",
+                        "system_info": "Dict containing comprehensive system information",
+                        "error": "str (if success=false)"
+                    }
                 }
-            ],
+            },
 
             "usage_guidelines": {
                 "puzzle_requests": "Users can request specific themes like 'endgame tactics' or 'mate in 2'",
