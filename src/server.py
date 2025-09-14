@@ -538,6 +538,101 @@ def evaluate_chess_position(
             "error": str(e)
         }
 
+@mcp.tool(description="Get positions of all pieces on the current board state")
+def get_board_pieces(
+    puzzle_state: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """
+    Get the positions of all pieces on the chess board as a simple dict mapping squares to pieces.
+
+    Args:
+        puzzle_state: Optional puzzle state dict with keys:
+                     - puzzle_id: str
+                     - moves_uci: List[str]
+                     If not provided, uses current puzzle state
+
+    Returns:
+        {
+            "success": bool,
+            "puzzle_id": str,
+            "moves_uci": List[str],
+            "fen": str,
+            "pieces": Dict[str, str],  # e.g. {"e1": "K", "d8": "q", "a7": "p", ...}
+            "error": str (if success=false)
+        }
+    """
+    try:
+        # Use current state if no puzzle_state provided
+        if puzzle_state is None:
+            current_state = puzzle_manager.get_current_state()
+            current_puzzle = puzzle_manager.get_current_puzzle()
+
+            if not current_state or not current_puzzle:
+                return {
+                    "success": False,
+                    "error": "No active puzzle state. Use get_new_puzzle first."
+                }
+
+            board = puzzle_manager.get_board_from_state(current_state)
+            puzzle_id = current_state.puzzle_id
+            moves_uci = list(current_state.moves_uci)
+
+        else:
+            # Handle specific puzzle state
+            puzzle_id = puzzle_state.get("puzzle_id")
+            moves_uci = puzzle_state.get("moves_uci", [])
+
+            if not puzzle_id:
+                return {
+                    "success": False,
+                    "error": "puzzle_id is required in puzzle_state"
+                }
+
+            # Validate puzzle_id matches current puzzle
+            current_puzzle = puzzle_manager.get_current_puzzle()
+            if not current_puzzle:
+                return {
+                    "success": False,
+                    "error": "No active puzzle. Use get_new_puzzle first."
+                }
+
+            if puzzle_id != current_puzzle.puzzle_id:
+                return {
+                    "success": False,
+                    "error": f"Puzzle ID mismatch. Current: {current_puzzle.puzzle_id}, provided: {puzzle_id}"
+                }
+
+            # Create PuzzleState object
+            from state_manager import PuzzleState
+            state = PuzzleState(
+                puzzle_id=puzzle_id,
+                moves_uci=tuple(moves_uci)
+            )
+            board = puzzle_manager.get_board_from_state(state)
+
+        # Extract piece positions as simple dict
+        pieces = {}
+        import chess
+        for square in chess.SQUARES:
+            piece = board.piece_at(square)
+            if piece:
+                square_name = chess.square_name(square)
+                pieces[square_name] = piece.symbol()
+
+        return {
+            "success": True,
+            "puzzle_id": puzzle_id,
+            "moves_uci": moves_uci,
+            "fen": board.fen(),
+            "pieces": pieces
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
 @mcp.tool(description="Read user preferences and interaction history from persistent memory")
 def read_memory() -> Dict[str, Any]:
     """
@@ -716,6 +811,11 @@ def get_system_info() -> Dict[str, Any]:
                 {
                     "name": "evaluate_chess_position",
                     "description": "Evaluate a chess position using Stockfish engine",
+                    "parameters": ["puzzle_state (optional)"]
+                },
+                {
+                    "name": "get_board_pieces",
+                    "description": "Get positions of all pieces on the current board state",
                     "parameters": ["puzzle_state (optional)"]
                 },
                 {
