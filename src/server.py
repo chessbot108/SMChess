@@ -14,7 +14,7 @@ from fastmcp import FastMCP
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelnaackme)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 try:
     # Try relative imports first (when run as module)
@@ -195,32 +195,30 @@ def generate_board_image(board, message_id: int) -> str:
 
 @mcp.tool(description="Send a message with optional puzzle state image")
 def send_message(
-    data: Dict[str, Any]
+    message: str,
+    puzzle_state: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """
     Send a message and optionally attach a puzzle state as an image.
 
     Args:
-        data: JSON object containing:
-              - message: str (required) - The text message to send
-              - puzzle_state: dict (optional) - Puzzle state for image generation
-                  - puzzle_id: str (required)
-                  - moves_uci: List[str] (required)
-                  - message_id: int (optional)
+        message: The text message to send
+        puzzle_state: Optional puzzle state dict with keys:
+                     - puzzle_id: str
+                     - moves_uci: List[str]
+                     - message_id: int (optional)
 
     Example valid input:
-        {
-            "message": "Here's the current position",
-            "puzzle_state": {
-                "puzzle_id": "abc123",
-                "moves_uci": ["e2e4", "e7e5", "g1f3"]
-            }
+        message="Here's the current position"
+        puzzle_state={
+            "puzzle_id": "abc123",
+            "moves_uci": ["e2e4", "e7e5", "g1f3"]
         }
 
     Returns:
         {
             "success": bool,
-        "message_id": int,
+            "message_id": int,
             "message": str,
             "image_url": str (optional),
             "error": str (if success=false)
@@ -229,17 +227,6 @@ def send_message(
     global message_counter
 
     try:
-        # Extract required message
-        message = data.get("message")
-        if not message:
-            return {
-                "success": False,
-                "error": "message is required"
-            }
-
-        # Extract optional puzzle_state
-        puzzle_state = data.get("puzzle_state")
-
         # Increment message counter
         message_counter += 1
         current_message_id = message_counter
@@ -899,23 +886,23 @@ def get_system_info() -> Dict[str, Any]:
                 "send_message": {
                     "description": "Send a message with optional puzzle state image",
                     "parameters": {
-                        "data": {
-                            "type": "Dict[str, Any]",
+                        "message": {
+                            "type": "string",
                             "required": True,
-                            "description": "JSON object containing message and optional puzzle state",
+                            "description": "The text message to send"
+                        },
+                        "puzzle_state": {
+                            "type": "Dict[str, Any]",
+                            "required": False,
+                            "description": "Optional puzzle state for image generation",
                             "schema": {
-                                "message": "str (required) - The text message to send",
-                                "puzzle_state": "Dict (optional) - Puzzle state for image generation",
-                                "puzzle_state.puzzle_id": "str (required)",
-                                "puzzle_state.moves_uci": "List[str] (required)",
-                                "puzzle_state.message_id": "int (optional)"
+                                "puzzle_id": "str (required)",
+                                "moves_uci": "List[str] (required)",
+                                "message_id": "int (optional)"
                             },
                             "example": {
-                                "message": "Here's the current position",
-                                "puzzle_state": {
-                                    "puzzle_id": "abc123",
-                                    "moves_uci": ["e2e4", "e7e5", "g1f3"]
-                                }
+                                "puzzle_id": "abc123",
+                                "moves_uci": ["e2e4", "e7e5", "g1f3"]
                             }
                         }
                     },
