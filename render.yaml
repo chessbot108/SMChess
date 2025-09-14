@@ -1,11 +1,13 @@
 services:
   - type: web
-    name: fastmcp-server
+    name: smchess-mcp-server
     runtime: python
     buildCommand: uv sync
-    startCommand: python src/server.py
+    startCommand: uv run python -m src.server
     plan: free
     autoDeploy: false
     envVars:
       - key: ENVIRONMENT
         value: production
+      - key: PORT
+        value: 10000

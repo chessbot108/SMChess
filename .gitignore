@@ -208,6 +208,10 @@ __marimo__/
 
 
 # vscode
-
 .vscode/
+
+# Project specific
+data/
+static/
+system/
 
